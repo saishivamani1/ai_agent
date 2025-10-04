@@ -20,6 +20,8 @@ client = Client(account_sid, auth_token)
 # ---------- FastAPI Setup ----------
 app = FastAPI(title="Asteroid Hazard FastAPI", version="0.3.0")
 
+app.run(host="0.0.0.0", port=8000)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -145,4 +147,5 @@ def predict(inp: PredictIn, background: BackgroundTasks):
             Ring(threshold="3 psi", radius_km=r3),
             Ring(threshold="1 psi", radius_km=r1),
         ],
+
     )
