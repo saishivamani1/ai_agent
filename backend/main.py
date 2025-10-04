@@ -4,30 +4,42 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from math import pi
+import os
+import logging
 
-# ✅ Twilio import
-from twilio.rest import Client
+# Optional Twilio import guarded behind env checks
+try:
+    from twilio.rest import Client  # type: ignore
+except Exception:
+    Client = None  # allows app to start even if twilio isn't installed
 
-# ---------- Twilio Config ----------
-account_sid = 'ACc78f4002d342b9c26f196a5ba7b41a8f'
-auth_token = '55e630a9df878ad20cc166611458a3ce'   # <-- replace with your actual Auth Token
-messaging_service_sid = 'MGbe56b4df6eb22a5bbe7a7f3cbe64c5e4'
-alert_phone = '+919398351807'  # <-- your number
+# ---------- Config (from environment) ----------
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+TWILIO_MESSAGING_SERVICE_SID = os.getenv("TWILIO_MESSAGING_SERVICE_SID", "").strip()
+ALERT_PHONE = os.getenv("ALERT_PHONE", "").strip()
 
-client = Client(account_sid, auth_token)
+# Comma-separated list of allowed origins, e.g. "https://frontend.onrender.com,http://localhost:3000"
+CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
 
+# Build a Twilio client only if creds are present
+_twilio_client = None
+if Client and TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN:
+    try:
+        _twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    except Exception as e:
+        logging.warning("Twilio client init failed: %s", e)
 
 # ---------- FastAPI Setup ----------
 app = FastAPI(title="Asteroid Hazard FastAPI", version="0.3.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000","https://ai-agent-iho3.onrender.com"],
+    allow_origins=CORS_ORIGINS if CORS_ORIGINS else ["*"],  # permissive if not set
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # ---------- Models ----------
 class PredictIn(BaseModel):
@@ -96,16 +108,26 @@ def hazard_bucket(energy_mt: float, r5_km: float) -> str:
 
 
 # ---------- Twilio Send ----------
-def send_sms_alert(body: str, to: str = alert_phone):
+def send_sms_alert(body: str, to: str = None):
+    """Send SMS using Twilio if configured; otherwise log and skip."""
+    if not _twilio_client or not TWILIO_MESSAGING_SERVICE_SID:
+        logging.info("[twilio] skipped (not configured)")
+        return
+
+    recipient = (to or ALERT_PHONE).strip()
+    if not recipient:
+        logging.info("[twilio] skipped (no ALERT_PHONE)")
+        return
+
     try:
-        message = client.messages.create(
-            messaging_service_sid=messaging_service_sid,
+        message = _twilio_client.messages.create(
+            messaging_service_sid=TWILIO_MESSAGING_SERVICE_SID,
             body=body,
-            to=to
+            to=recipient,
         )
-        print("[twilio] Message SID:", message.sid)
+        logging.info("[twilio] Message SID: %s", getattr(message, "sid", "unknown"))
     except Exception as e:
-        print("[twilio] error:", e)
+        logging.warning("[twilio] error: %s", e)
 
 
 # ---------- Routes ----------
@@ -145,10 +167,11 @@ def predict(inp: PredictIn, background: BackgroundTasks):
             Ring(threshold="3 psi", radius_km=r3),
             Ring(threshold="1 psi", radius_km=r1),
         ],
-
     )
+
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
 
+    port = int(os.getenv("PORT", "8000"))  # Render provides PORT
+    uvicorn.run(app, host="0.0.0.0", port=port)
