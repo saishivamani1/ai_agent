@@ -4,7 +4,6 @@ services:
     env: docker
     plan: free
     rootDir: backend
-    dockerfilePath: ./backend/Dockerfile
     autoDeploy: true
     envVars:
       - key: PORT
@@ -18,7 +17,6 @@ services:
     env: docker
     plan: free
     rootDir: server
-    dockerfilePath: ./server/Dockerfile
     autoDeploy: true
     envVars:
       - key: PORT
@@ -34,7 +32,6 @@ services:
     env: docker
     plan: free
     rootDir: .
-    dockerfilePath: ./Dockerfile
     autoDeploy: true
     envVars:
       - key: PORT
