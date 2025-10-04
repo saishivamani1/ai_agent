@@ -16,6 +16,13 @@ import io from "socket.io-client";
 // import 'leaflet/dist/leaflet.css';
 // import './index.css'; // html, body, #root { height:100%; margin:0; }
 
+// --- Use env-driven URLs (Render + local dev) ---
+const API_BASE =
+  process.env.REACT_APP_API_BASE_URL || "http://localhost:5000"; // Node server (REST)
+const SOCKET_URL =
+  process.env.REACT_APP_SOCKET_URL || API_BASE; // Socket.IO endpoint (often same as Node)
+
+// Leaflet marker assets
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:   "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
@@ -23,7 +30,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl:       "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-const API_BASE = process.env.REACT_APP_API_BASE || "http://localhost:5000"; // your Node server (also Socket.IO)
 const pretty = (n) => new Intl.NumberFormat().format(n);
 
 /* ---------------- AgentX chat widget ---------------- */
@@ -160,7 +166,7 @@ export default function App() {
 
   // connect to Socket.IO for red alerts
   useEffect(() => {
-    const socket = io(API_BASE, { transports: ["websocket"] });
+    const socket = io(SOCKET_URL, { transports: ["websocket"] });
     socket.on("connect", () => console.log("[socket] connected:", socket.id));
     socket.on("red_alert", (payload) => {
       const text = `🚨 RED ALERT: ${String(payload?.summary?.hazard_level || "").toUpperCase()} • ` +
