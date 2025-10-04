@@ -1,16 +1,51 @@
 services:
+  # ---------- Frontend (Create React App) ----------
+  - type: web
+    name: frontend
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./build
+
+    # Allow client-side routing: send all paths to index.html
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+    # Frontend needs to know where to call your APIs / sockets
+    envVars:
+      - key: REACT_APP_API_BASE_URL
+        value: https://backend-service.onrender.com
+      - key: REACT_APP_SOCKET_URL
+        value: https://node-server.onrender.com
+
+  # ---------- Python FastAPI backend ----------
   - type: web
     name: backend-service
-    env: docker
+    runtime: docker
     dockerfilePath: ./backend/Dockerfile
-    autoDeploy: true
+    autoDeployTrigger: commit
+    envVars:
+      # Let FastAPI CORS allow your deployed frontend
+      - key: CORS_ORIGINS
+        value: https://frontend.onrender.com
+      # Secrets: you’ll be prompted once during first blueprint creation
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      # add any other backend env vars here (DB URLs, etc.)
 
+  # ---------- Node/Socket.IO server ----------
   - type: web
     name: node-server
-    env: docker
+    runtime: docker
     dockerfilePath: ./server/Dockerfile
-    autoDeploy: true
-
-
-
-
+    autoDeployTrigger: commit
+    envVars:
+      - key: PORT
+        value: 3000
+      # Tell the Node server what the browser origin will be
+      - key: CLIENT_ORIGIN
+        value: https://frontend.onrender.com
+      # Add any other server-side secrets with sync:false if needed
