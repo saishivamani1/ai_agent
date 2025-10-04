@@ -1,54 +1,14 @@
 services:
   - type: web
-    name: asteroid-backend
+    name: backend-service
     env: docker
+    dockerfilePath: ./backend/Dockerfile
     plan: free
-    rootDir: backend
     autoDeploy: true
-    envVars:
-      - key: PORT
-        value: 8000
-      - key: PYTHONUNBUFFERED
-        value: "1"
-      - fromGroup: asteroid-env
 
   - type: web
-    name: asteroid-server
+    name: node-server
     env: docker
+    dockerfilePath: ./server/Dockerfile
     plan: free
-    rootDir: server
     autoDeploy: true
-    envVars:
-      - key: PORT
-        value: 5000
-      - key: CLIENT_ORIGIN
-        value: https://asteroid-client.onrender.com
-      - key: FASTAPI_URL
-        value: https://asteroid-backend.onrender.com
-      - fromGroup: asteroid-env
-
-  - type: web
-    name: asteroid-client
-    env: docker
-    plan: free
-    rootDir: src
-    autoDeploy: true
-    envVars:
-      - key: PORT
-        value: 3000
-      - key: HOST
-        value: 0.0.0.0
-      - key: REACT_APP_API_BASE
-        value: https://asteroid-server.onrender.com
-
-envVarGroups:
-  - name: asteroid-env
-    envVars:
-      - key: TWILIO_ACCOUNT_SID
-        sync: false
-      - key: TWILIO_AUTH_TOKEN
-        sync: false
-      - key: TWILIO_MESSAGING_SID
-        sync: false
-      - key: ALERT_PHONE
-        sync: false
