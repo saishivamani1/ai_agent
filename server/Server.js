@@ -12,7 +12,9 @@ dotenv.config();
 // --- Env ---
 const PORT = process.env.PORT || 5000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:3000";
-const FASTAPI_URL = process.env.FASTAPI_URL || "http://localhost:8000";
+// ✅ Point to your Render FastAPI service by default (can still be overridden via env)
+const FASTAPI_URL =
+  process.env.FASTAPI_URL || "https://backend-service-w8d7.onrender.com";
 
 // Twilio
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
@@ -30,10 +32,8 @@ const server = http.createServer(app);
 const io = new SocketServer(server, {
   cors: { origin: CLIENT_ORIGIN, methods: ["GET", "POST"] },
 });
-app.listen(3000, "0.0.0.0", () => {
-  console.log("Server running on port 3000");
-});
 
+// ❌ removed extra app.listen(...) — use only server.listen
 
 app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
 app.use(express.json());
@@ -192,7 +192,7 @@ app.post("/api/predict", async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
+// ✅ Single listener; bind to 0.0.0.0 so Render can reach it
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`[server] listening on :${PORT}`);
 });
-
