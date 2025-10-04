@@ -28,8 +28,6 @@ services:
       - key: FASTAPI_URL
         value: https://asteroid-backend.onrender.com
       - fromGroup: asteroid-env
-    dependsOn:
-      - asteroid-backend
 
   - type: web
     name: asteroid-client
@@ -45,8 +43,6 @@ services:
         value: 0.0.0.0
       - key: REACT_APP_API_BASE
         value: https://asteroid-server.onrender.com
-    dependsOn:
-      - asteroid-server
 
 envVarGroups:
   - name: asteroid-env
