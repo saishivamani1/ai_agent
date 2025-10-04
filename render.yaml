@@ -12,10 +12,5 @@ services:
     dockerfilePath: ./server/Dockerfile
     autoDeploy: true
 
-  # ✅ Frontend as a Static Site
-  - type: web
-    name: web-frontend
-    runtime: static
-    buildCommand: npm install && npm run build
-    # For Vite use "dist"; for CRA use "build"
-    staticPublishPath: dist
+
+
