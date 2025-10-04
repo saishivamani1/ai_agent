@@ -3,12 +3,23 @@ services:
     name: backend-service
     env: docker
     dockerfilePath: ./backend/Dockerfile
-    plan: free
     autoDeploy: true
+    healthCheckPath: /health
 
   - type: web
     name: node-server
     env: docker
     dockerfilePath: ./server/Dockerfile
-    plan: free
     autoDeploy: true
+
+  # 👇 NEW: Frontend as a Static Site
+  - type: static
+    name: web-frontend
+    env: static
+    buildCommand: npm install && npm run build
+    # For Vite use "dist"; for CRA use "build".
+    staticPublishPath: dist
+    # Optional: pass API base URL at build time
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://backend-service.onrender.com
