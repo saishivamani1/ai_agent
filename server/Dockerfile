@@ -1,18 +1,16 @@
-# Use official Node.js LTS image
-FROM node:18
+# server/Dockerfile
+FROM node:18-alpine
 
-# Set workdir
 WORKDIR /app
 
-# Copy package files & install deps
-COPY server/package*.json ./
-RUN npm install --production
+# Your package.json is in the repo root (not server/)
+COPY package*.json ./
+RUN npm ci --omit=dev
 
-# Copy rest of the app
+# Now copy the app source from server/
 COPY server/ .
 
-# Expose port (Express default 3000)
+ENV NODE_ENV=production
+# Render sets PORT; make sure Server.js uses process.env.PORT || 3000
 EXPOSE 3000
-
-# Run app
 CMD ["node", "Server.js"]
