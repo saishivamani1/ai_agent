@@ -1,20 +1,19 @@
-# Client (React) dev server
-FROM node:20-alpine
+FROM node:20-slim AS build
 
 WORKDIR /app
 
-# Install dependencies first (better caching)
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
-# Copy the rest of the app
 COPY . .
 
-ENV HOST=0.0.0.0
-ENV PORT=3000
-ENV REACT_APP_API_BASE=http://localhost:5000
+RUN npm run build
+
+# Production server
+FROM nginx:alpine
+
+COPY --from=build /app/build /usr/share/nginx/html
 
 EXPOSE 3000
 
-# CRA dev server (hot reload)
-CMD ["npm", "start"]
+CMD ["nginx", "-g", "daemon off;"]
