@@ -1,51 +1,63 @@
 services:
-  # ---------- Frontend (Create React App) ----------
+  # ======================= FRONTEND (React, root /src) =======================
   - type: web
     name: frontend
     runtime: static
     buildCommand: npm ci && npm run build
     staticPublishPath: ./build
-
-    # Allow client-side routing: send all paths to index.html
+    # SPA routing so client-side routes work
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
-
-    # Frontend needs to know where to call your APIs / sockets
     envVars:
+      # Point the React app to the Node service (public URL is derived from service name)
       - key: REACT_APP_API_BASE_URL
-        value: https://backend-service.onrender.com
+        value: https://node-server.onrender.com
       - key: REACT_APP_SOCKET_URL
         value: https://node-server.onrender.com
 
-  # ---------- Python FastAPI backend ----------
+  # ======================= BACKEND (FastAPI) =======================
   - type: web
     name: backend-service
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
-    autoDeployTrigger: commit
+    autoDeploy: true
+    healthCheckPath: /health
     envVars:
-      # Let FastAPI CORS allow your deployed frontend
+      # Allow the hosted frontend and node-server to call FastAPI
       - key: CORS_ORIGINS
-        value: https://frontend.onrender.com
-      # Secrets: you’ll be prompted once during first blueprint creation
+        value: https://frontend.onrender.com,https://node-server.onrender.com
+      # --- Twilio (prompted securely at deploy time) ---
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN
         sync: false
-      # add any other backend env vars here (DB URLs, etc.)
+      - key: TWILIO_MESSAGING_SERVICE_SID
+        sync: false
+      - key: ALERT_PHONE
+        sync: false
 
-  # ---------- Node/Socket.IO server ----------
+  # ======================= NODE / SOCKET.IO (proxy + alerts) =======================
   - type: web
     name: node-server
     runtime: docker
     dockerfilePath: ./server/Dockerfile
-    autoDeployTrigger: commit
+    autoDeploy: true
+    healthCheckPath: /health
     envVars:
-      - key: PORT
-        value: 3000
-      # Tell the Node server what the browser origin will be
+      # Frontend origin(s) for CORS (add more origins with commas if needed)
       - key: CLIENT_ORIGIN
         value: https://frontend.onrender.com
-      # Add any other server-side secrets with sync:false if needed
+      # Where Node calls the FastAPI backend
+      - key: FASTAPI_URL
+        value: https://backend-service.onrender.com
+      # --- Twilio (prompted securely at deploy time) ---
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_MESSAGING_SERVICE_SID
+        sync: false
+      - key: ALERT_PHONE
+        sync: false
