@@ -30,6 +30,10 @@ const server = http.createServer(app);
 const io = new SocketServer(server, {
   cors: { origin: CLIENT_ORIGIN, methods: ["GET", "POST"] },
 });
+app.listen(3000, "0.0.0.0", () => {
+  console.log("Server running on port 3000");
+});
+
 
 app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
 app.use(express.json());
@@ -191,3 +195,4 @@ app.post("/api/predict", async (req, res) => {
 server.listen(PORT, () => {
   console.log(`[server] listening on :${PORT}`);
 });
+
