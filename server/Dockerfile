@@ -1,14 +1,18 @@
-FROM node:20-slim
+# Use official Node.js LTS image
+FROM node:18
 
+# Set workdir
 WORKDIR /app
 
-COPY package*.json ./
-
+# Copy package files & install deps
+COPY server/package*.json ./
 RUN npm install --production
 
-COPY . .
+# Copy rest of the app
+COPY server/ .
 
-EXPOSE 5000
+# Expose port (Express default 3000)
+EXPOSE 3000
 
-# Use dynamic PORT from Render
+# Run app
 CMD ["node", "Server.js"]
