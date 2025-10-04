@@ -7,40 +7,50 @@ import http from "http";
 import { Server as SocketServer } from "socket.io";
 import twilio from "twilio";
 
+// Load .env locally; Render injects env so this is harmless there
 dotenv.config();
 
-// --- Env ---
+// ---------- Env ----------
 const PORT = process.env.PORT || 5000;
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || "http://localhost:3000";
-// ✅ Point to your Render FastAPI service by default (can still be overridden via env)
-const FASTAPI_URL =
-  process.env.FASTAPI_URL || "https://backend-service-w8d7.onrender.com";
 
-// Twilio
+// Allow single origin or comma-separated origins in CLIENT_ORIGIN
+const rawOrigins = process.env.CLIENT_ORIGIN || "http://localhost:3000";
+const ORIGINS = rawOrigins
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const FASTAPI_URL_RAW =
+  process.env.FASTAPI_URL || "https://backend-service-w8d7.onrender.com";
+const FASTAPI_URL = FASTAPI_URL_RAW.replace(/\/+$/g, ""); // strip trailing slash
+
+// Twilio (support both common env names for messaging service SID)
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-const TWILIO_AUTH_TOKEN  = process.env.TWILIO_AUTH_TOKEN;
-const TWILIO_MSID        = process.env.TWILIO_MESSAGING_SID; // Messaging Service SID (MG...)
-const DEFAULT_ALERT_TO   = process.env.ALERT_PHONE;          // e.g. +9193xxxxxxx
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+const TWILIO_MSID =
+  process.env.TWILIO_MESSAGING_SID ||
+  process.env.TWILIO_MESSAGING_SERVICE_SID; // MGxxxxxxxx
+const DEFAULT_ALERT_TO = process.env.ALERT_PHONE; // e.g. +9193xxxxxxx
 
 const twilioClient =
   TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN
     ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
     : null;
 
+// ---------- App / Sockets ----------
 const app = express();
 const server = http.createServer(app);
 const io = new SocketServer(server, {
-  cors: { origin: CLIENT_ORIGIN, methods: ["GET", "POST"] },
+  cors: { origin: ORIGINS, methods: ["GET", "POST"], credentials: true },
 });
 
-// ❌ removed extra app.listen(...) — use only server.listen
+// CORS + JSON
+app.use(cors({ origin: ORIGINS, credentials: true }));
+app.use(express.json({ limit: "1mb" }));
 
-app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
-app.use(express.json());
-
-// --- Simple de-duplication to avoid spam ---
+// ---------- De-duplication (basic debounce) ----------
 const lastSendByKey = new Map(); // key -> timestamp
-const DEBOUNCE_MS = 90 * 1000;   // 90s
+const DEBOUNCE_MS = 90 * 1000; // 90s
 
 function shouldSend(key) {
   const now = Date.now();
@@ -50,14 +60,14 @@ function shouldSend(key) {
   return true;
 }
 
-// --- Twilio helpers ---
+// ---------- Twilio helpers ----------
 function requireTwilio() {
   if (!twilioClient) {
     console.error("[twilio] not configured: set TWILIO_ACCOUNT_SID & TWILIO_AUTH_TOKEN");
     return false;
   }
   if (!TWILIO_MSID) {
-    console.error("[twilio] TWILIO_MESSAGING_SID missing");
+    console.error("[twilio] missing TWILIO_MESSAGING_SID or TWILIO_MESSAGING_SERVICE_SID");
     return false;
   }
   return true;
@@ -65,14 +75,9 @@ function requireTwilio() {
 
 async function sendImmediateSMS({ to, body }) {
   if (!requireTwilio()) return { ok: false, error: "Twilio not configured" };
-  if (!to) {
-    console.error(`[twilio] Missing "to" number (no req.body.to and no ALERT_PHONE).`);
-    return { ok: false, error: 'Missing "to" number' };
-  }
-  if (!body) {
-    console.error(`[twilio] Missing "body"`);
-    return { ok: false, error: 'Missing "body"' };
-  }
+  if (!to) return { ok: false, error: 'Missing "to" number' };
+  if (!body) return { ok: false, error: 'Missing "body"' };
+
   try {
     const msg = await twilioClient.messages.create({
       to,
@@ -89,34 +94,30 @@ async function sendImmediateSMS({ to, body }) {
 
 async function scheduleSMS({ to, body, sendAtISO }) {
   if (!requireTwilio()) return { ok: false, error: "Twilio not configured" };
-  if (!to) {
-    console.error(`[twilio] Missing "to" number (no req.body.to and no ALERT_PHONE).`);
-    return { ok: false, error: 'Missing "to" number' };
-  }
-  if (!body) {
-    console.error(`[twilio] Missing "body"`);
-    return { ok: false, error: 'Missing "body"' };
-  }
+  if (!to) return { ok: false, error: 'Missing "to" number' };
+  if (!body) return { ok: false, error: 'Missing "body"' };
+
   try {
     const msg = await twilioClient.messages.create({
       to,
       body,
       messagingServiceSid: TWILIO_MSID,
-      sendAt: sendAtISO,           // must be in the future, ISO 8601
+      sendAt: sendAtISO, // must be in the future, ISO 8601
       scheduleType: "fixed",
     });
     console.log("[twilio] scheduled:", msg.sid, "sendAt:", sendAtISO);
     return { ok: true, sid: msg.sid };
   } catch (err) {
-    console.error("[twilio] SMS scheduling error:", err?.message || err);
+    console.error("[twilio] schedule error:", err?.message || err);
     return { ok: false, error: err?.message || String(err) };
   }
 }
 
-// --- Health ---
-app.get("/api/health", (_req, res) => res.json({ ok: true }));
+// ---------- Health ----------
+app.get("/health", (_req, res) => res.json({ ok: true })); // for Render
+app.get("/api/health", (_req, res) => res.json({ ok: true })); // your existing path
 
-// --- Manual SMS (immediate) ---
+// ---------- Manual SMS (immediate) ----------
 app.post("/api/send-sms", async (req, res) => {
   const to = req.body?.to || DEFAULT_ALERT_TO;
   const body = req.body?.body || "Test from Node ✅";
@@ -128,7 +129,7 @@ app.post("/api/send-sms", async (req, res) => {
   res.json(r);
 });
 
-// --- Manual SMS (scheduled) ---
+// ---------- Manual SMS (scheduled) ----------
 app.post("/api/schedule-sms", async (req, res) => {
   const to = req.body?.to || DEFAULT_ALERT_TO;
   const body = req.body?.body || "Scheduled from Node ⏰";
@@ -141,29 +142,30 @@ app.post("/api/schedule-sms", async (req, res) => {
   res.json(r);
 });
 
-// --- Proxy to FastAPI + alert bridge ---
+// ---------- Proxy to FastAPI + alert bridge ----------
 app.post("/api/predict", async (req, res) => {
   try {
     const r = await axios.post(`${FASTAPI_URL}/predict`, req.body, { timeout: 15000 });
     const data = r.data;
 
-    // push to UI
+    // Broadcast to clients
     io.emit("red_alert", {
       when: new Date().toISOString(),
       summary: {
         hazard_level: data?.hazard_level,
         energy_megatons: data?.energy_megatons,
-        severe_radius_km: data?.overpressure?.find((b) => b.threshold === "5 psi")?.radius_km ?? null,
+        severe_radius_km:
+          data?.overpressure?.find((b) => b.threshold === "5 psi")?.radius_km ?? null,
         mode: data?.mode,
       },
       location: { lat: req.body?.lat, lon: req.body?.lon },
     });
 
-    // on red alert, send SMS (immediate)
+    // On red alert, send SMS
     if (data?.red_alert) {
-      const to = req.body?.notify_phone || DEFAULT_ALERT_TO; // allow override from client
+      const to = req.body?.notify_phone || DEFAULT_ALERT_TO;
       if (!to) {
-        console.error('[twilio] "to" number missing: set ALERT_PHONE in .env or send notify_phone in body.');
+        console.error('[twilio] "to" number missing: set ALERT_PHONE env or send notify_phone in body.');
       } else {
         const severeRadius =
           data?.overpressure?.find((b) => b.threshold === "5 psi")?.radius_km ?? "?";
@@ -192,7 +194,26 @@ app.post("/api/predict", async (req, res) => {
   }
 });
 
-// ✅ Single listener; bind to 0.0.0.0 so Render can reach it
+// ---------- Socket events (optional demo) ----------
+io.on("connection", (socket) => {
+  console.log("[socket] client connected:", socket.id);
+  socket.on("disconnect", () => console.log("[socket] client disconnected:", socket.id));
+});
+
+// ---------- Start server (single listener) ----------
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`[server] listening on :${PORT}`);
 });
+
+// ---------- Graceful shutdown ----------
+function shutdown(signal) {
+  console.log(`[server] ${signal} received, shutting down...`);
+  server.close(() => {
+    console.log("[server] closed");
+    process.exit(0);
+  });
+  // force-exit if not closed in time
+  setTimeout(() => process.exit(1), 10_000).unref();
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
