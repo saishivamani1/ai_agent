@@ -31,7 +31,7 @@ services:
     name: asteroid-client
     env: docker
     plan: free
-    rootDir: .
+    rootDir: src
     autoDeploy: true
     envVars:
       - key: PORT
