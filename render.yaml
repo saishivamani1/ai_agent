@@ -4,13 +4,13 @@ services:
     env: docker
     dockerfilePath: ./backend/Dockerfile
     autoDeploy: true
-    healthCheckPath: /health
 
   - type: web
     name: node-server
     env: docker
     dockerfilePath: ./server/Dockerfile
     autoDeploy: true
+
 
 
 
