@@ -1,17 +1,18 @@
+# Use lightweight Python image
 FROM python:3.11-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
+# Set workdir
 WORKDIR /app
 
-COPY requirements.txt .
-
+# Install dependencies
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Copy source code
+COPY backend/ .
 
+# Expose port (default Flask/FastAPI/Django is usually 5000 or 8000)
 EXPOSE 8000
 
-# Use dynamic PORT from Render
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "${PORT}"]
+# Run app
+CMD ["python", "main.py"]
